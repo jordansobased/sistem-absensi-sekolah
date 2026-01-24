@@ -8,9 +8,6 @@ use Firebase\JWT\Key;
 
 header("Content-Type: application/json");
 
-// ==========================
-// CEK TOKEN
-// ==========================
 $headers = getallheaders();
 if (!isset($headers['Authorization'])) {
     http_response_code(401);
@@ -22,48 +19,48 @@ $token = str_replace("Bearer ", "", $headers['Authorization']);
 
 try {
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
-    if ($decoded->data->role !== 'siswa') {
+    if (!in_array($decoded->data->role, ["siswa", "guru", "admin"])) {
         http_response_code(403);
-        echo json_encode(["message" => "Hanya siswa"]);
+        echo json_encode(["message" => "Akses ditolak"]);
         exit;
     }
-    $siswa_id = $decoded->data->id;
+    $role = $decoded->data->role;
+    $user_id = $decoded->data->id;
 } catch (Exception $e) {
     http_response_code(401);
     echo json_encode(["message" => "Token tidak valid"]);
     exit;
 }
 
-// ==========================
-// PARAMETER BULAN & TAHUN
-// ==========================
-$bulan = $_GET['bulan'] ?? date('m');
-$tahun = $_GET['tahun'] ?? date('Y');
+if ($role === "siswa") {
+    $siswa_id = $user_id;
+} else {
+    if (!isset($_GET['siswa_id'])) {
+        http_response_code(400);
+        echo json_encode(["message" => "siswa_id wajib diisi"]);
+        exit;
+    }
+    $siswa_id = $_GET['siswa_id'];
+}
 
-// ==========================
-// QUERY REKAP
-// ==========================
 $db = new Database();
 $conn = $db->connect();
 
-$query = "SELECT tanggal, status
+$query = "SELECT 
+            absensi.tanggal,
+            absensi.status,
+            users.nama AS nama_siswa
           FROM absensi
-          WHERE siswa_id = :siswa_id
-          AND MONTH(tanggal) = :bulan
-          AND YEAR(tanggal) = :tahun
-          ORDER BY tanggal ASC";
+          JOIN users ON absensi.siswa_id = users.id
+          WHERE absensi.siswa_id = :siswa_id
+          ORDER BY absensi.tanggal ASC";
 
 $stmt = $conn->prepare($query);
 $stmt->bindParam(":siswa_id", $siswa_id);
-$stmt->bindParam(":bulan", $bulan);
-$stmt->bindParam(":tahun", $tahun);
 $stmt->execute();
 
 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ==========================
-// HITUNG REKAP
-// ==========================
 $rekap = [
     "hadir" => 0,
     "izin" => 0,
@@ -77,12 +74,11 @@ foreach ($data as $row) {
     }
 }
 
-// ==========================
-// RESPONSE
-// ==========================
 echo json_encode([
-    "bulan" => $bulan,
-    "tahun" => $tahun,
+    "status" => true,
+    "role" => $role,
+    "siswa_id" => $siswa_id,
+    "nama_siswa" => $data[0]['nama_siswa'] ?? null,
     "total_hari" => count($data),
     "rekap" => $rekap,
     "detail" => $data
