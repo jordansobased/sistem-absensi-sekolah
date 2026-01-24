@@ -4,7 +4,7 @@ header("Content-Type: application/json");
 include_once "../middleware/auth.php";
 include_once "../config/database.php";
 
-/* CEK ROLE */
+//cek role 
 if ($userData->role !== "guru") {
     http_response_code(403);
     echo json_encode(["message" => "Hanya guru yang bisa input absensi"]);
@@ -13,7 +13,7 @@ if ($userData->role !== "guru") {
 
 $data = json_decode(file_get_contents("php://input"));
 
-/* VALIDASI SEDERHANA */
+//validasi sederhana
 if (
     empty($data->siswa_id) ||
     empty($data->tanggal) ||
@@ -35,7 +35,7 @@ $query = "INSERT INTO absensi
 $stmt = $conn->prepare($query);
 
 $stmt->bindParam(":siswa_id", $data->siswa_id);
-$stmt->bindParam(":guru_id", $userData->id); // dari JWT
+$stmt->bindParam(":guru_id", $userData->id);
 $stmt->bindParam(":tanggal", $data->tanggal);
 $stmt->bindParam(":status", $data->status);
 
@@ -45,3 +45,4 @@ echo json_encode([
     "status" => true,
     "message" => "Absensi berhasil disimpan"
 ]);
+
