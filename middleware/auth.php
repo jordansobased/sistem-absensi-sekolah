@@ -21,9 +21,11 @@ $token = str_replace("Bearer ", "", $headers['Authorization']);
 
 try {
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
-    $userData = $decoded->data; // id, nama, role
+    $userData = $decoded->data;
+    $role = $decoded->data->role;
 } catch (Exception $e) {
     http_response_code(401);
     echo json_encode(["message" => "Token tidak valid"]);
     exit;
 }
+
