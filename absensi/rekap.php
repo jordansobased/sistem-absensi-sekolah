@@ -8,78 +8,118 @@ use Firebase\JWT\Key;
 
 header("Content-Type: application/json");
 
+//ambil header request
 $headers = getallheaders();
+
+//cek token
 if (!isset($headers['Authorization'])) {
     http_response_code(401);
     echo json_encode(["message" => "Token tidak ada"]);
     exit;
 }
 
+//ambil token
 $token = str_replace("Bearer ", "", $headers['Authorization']);
 
 try {
+    //decode token
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
+
+    //cek role
     if (!in_array($decoded->data->role, ["siswa", "guru", "admin"])) {
         http_response_code(403);
         echo json_encode(["message" => "Akses ditolak"]);
         exit;
     }
+
+    //simpan data user
     $role = $decoded->data->role;
     $user_id = $decoded->data->id;
+
 } catch (Exception $e) {
     http_response_code(401);
     echo json_encode(["message" => "Token tidak valid"]);
     exit;
 }
 
-if ($role === "siswa") {
-    $siswa_id = $user_id;
-} else {
-    if (!isset($_GET['siswa_id'])) {
-        http_response_code(400);
-        echo json_encode(["message" => "siswa_id wajib diisi"]);
-        exit;
-    }
-    $siswa_id = $_GET['siswa_id'];
-}
-
+//koneksi database
 $db = new Database();
 $conn = $db->connect();
 
-$query = "SELECT 
-            absensi.tanggal,
-            absensi.status,
-            users.nama AS nama_siswa
-          FROM absensi
-          JOIN users ON absensi.siswa_id = users.id
-          WHERE absensi.siswa_id = :siswa_id
-          ORDER BY absensi.tanggal ASC";
+//query untuk siswa
+if ($role === "siswa") {
+    $query = "SELECT 
+                absensi.id,
+                absensi.tanggal,
+                absensi.status,
+                users.nama AS nama_siswa
+              FROM absensi
+              JOIN users ON absensi.siswa_id = users.id
+              WHERE absensi.siswa_id = :id
+              ORDER BY absensi.tanggal ASC";
 
-$stmt = $conn->prepare($query);
-$stmt->bindParam(":siswa_id", $siswa_id);
+    $stmt = $conn->prepare($query);
+    $stmt->bindParam(":id", $user_id);
+
+//query untuk guru dan admin
+} else {
+    $query = "SELECT 
+                absensi.id,
+                absensi.siswa_id,
+                absensi.tanggal,
+                absensi.status,
+                users.nama AS nama_siswa
+              FROM absensi
+              JOIN users ON absensi.siswa_id = users.id
+              ORDER BY users.nama, absensi.tanggal ASC";
+
+    $stmt = $conn->prepare($query);
+}
+
+//eksekusi query
 $stmt->execute();
-
 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$rekap = [
-    "hadir" => 0,
-    "izin" => 0,
-    "sakit" => 0,
-    "alpha" => 0
-];
+//inisialisasi hasil
+$result = [];
 
+//olah data absensi
 foreach ($data as $row) {
-    if (isset($rekap[$row['status']])) {
-        $rekap[$row['status']]++;
+
+    //tentukan siswa
+    $sid = $row['siswa_id'] ?? $user_id;
+
+    //buat struktur awal siswa
+    if (!isset($result[$sid])) {
+        $result[$sid] = [
+            "siswa_id" => $sid,
+            "nama" => $row['nama_siswa'],
+            "rekap" => [
+                "hadir" => 0,
+                "izin" => 0,
+                "sakit" => 0,
+                "alpha" => 0
+            ],
+            "detail" => []
+        ];
     }
+
+    //hitung rekap status
+    if (isset($result[$sid]['rekap'][$row['status']])) {
+        $result[$sid]['rekap'][$row['status']]++;
+    }
+
+    //simpan detail absensi
+    $result[$sid]['detail'][] = [
+        "id" => $row['id'],
+        "tanggal" => $row['tanggal'],
+        "status" => $row['status']
+    ];
 }
+
 
 echo json_encode([
     "status" => true,
     "role" => $role,
-    "siswa_id" => $siswa_id,
-    "nama_siswa" => $data[0]['nama_siswa'] ?? null,
-    "total_hari" => count($data),
-    "rekap" => $rekap,
-    "detail" => $data
+    "data" => array_values($result)
 ]);
