@@ -1,40 +1,13 @@
 <?php
-require "../vendor/autoload.php";
-include_once "../config/database.php";
-include_once "../config/jwt.php";
-
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
-
 header("Content-Type: application/json");
 
-//ambil header request
-$headers = getallheaders();
+include_once "../middleware/auth.php";
+include_once "../config/database.php";
 
-//cek token ada atau tidak
-if (!isset($headers['Authorization'])) {
-    http_response_code(401);
-    echo json_encode(["message" => "Token tidak ada"]);
-    exit;
-}
-
-//ambil token dari header
-$token = str_replace("Bearer ", "", $headers['Authorization']);
-
-try {
-    //decode token jwt
-    $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
-
-    //cek role harus guru
-    if ($decoded->data->role !== 'guru') {
-        http_response_code(403);
-        echo json_encode(["message" => "Hanya guru"]);
-        exit;
-    }
-} catch (Exception $e) {
-    //token tidak valid
-    http_response_code(401);
-    echo json_encode(["message" => "Token tidak valid"]);
+//cek role harus guru
+if ($userData->role !== "guru") {
+    http_response_code(403);
+    echo json_encode(["message" => "Hanya guru"]);
     exit;
 }
 
