@@ -1,19 +1,20 @@
 <?php
 header("Content-Type: application/json");
-
 include_once "../middleware/auth.php";
 include_once "../config/database.php";
 
-/* CEK ROLE */
+//cek role harus guru
 if ($userData->role !== "guru") {
     http_response_code(403);
-    echo json_encode(["message" => "Hanya guru yang bisa melihat surat izin"]);
+    echo json_encode(["message" => "Hanya guru"]);
     exit;
 }
 
+//koneksi ke database
 $db = new Database();
 $conn = $db->connect();
 
+//query 
 $query = "SELECT 
             izin.id,
             izin.tanggal,
