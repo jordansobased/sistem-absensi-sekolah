@@ -8,41 +8,53 @@ use Firebase\JWT\Key;
 
 header("Content-Type: application/json");
 
+//ambil header request
 $headers = getallheaders();
+
+//cek token ada atau tidak
 if (!isset($headers['Authorization'])) {
     http_response_code(401);
     echo json_encode(["message" => "Token tidak ada"]);
     exit;
 }
 
+//ambil token dari header
 $token = str_replace("Bearer ", "", $headers['Authorization']);
 
 try {
+    //decode token jwt
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
-    if ($decoded->data->role !== 'admin') {
+
+    //cek role harus guru
+    if ($decoded->data->role !== 'guru') {
         http_response_code(403);
-        echo json_encode(["message" => "Hanya admin"]);
+        echo json_encode(["message" => "Hanya guru"]);
         exit;
     }
 } catch (Exception $e) {
+    //token tidak valid
     http_response_code(401);
     echo json_encode(["message" => "Token tidak valid"]);
     exit;
 }
 
+//ambil body request
 $data = json_decode(file_get_contents("php://input"));
 
-if (!isset($data->id)) {
+//cek id absensi
+if (!isset($data->id_absensi)) {
     http_response_code(400);
     echo json_encode(["message" => "ID tidak ada"]);
     exit;
 }
 
+//koneksi ke database
 $db = new Database();
 $conn = $db->connect();
 
+//query hapus absensi
 $stmt = $conn->prepare("DELETE FROM absensi WHERE id = :id");
-$stmt->bindParam(":id", $data->id);
+$stmt->bindParam(":id", $data->id_absensi);
 $stmt->execute();
 
 echo json_encode([
